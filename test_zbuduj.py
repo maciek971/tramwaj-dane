@@ -82,6 +82,7 @@ class Budowa(unittest.TestCase):
         self.assertEqual(g['3'], ('T', ''))
         self.assertEqual(g['116'], ('A', 'strefowa'))  # spacja w numerze przycięta
         self.assertEqual(g['240'], ('N', ''))
+        self.assertEqual(self.r['lines'][0]['t'], 'DELTA ↔ ALFA')
 
     def test_kolejnosc_przystankow_bez_petli(self):  # AC3
         self.assertEqual(nazwy(self.r, kierunek(self.r, '3', 0)), ['Alfa', 'Beta', 'CENT'])

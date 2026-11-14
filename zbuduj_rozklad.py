@@ -303,7 +303,8 @@ def zbuduj(z):
         'validTo': koniec.isoformat(),
         'days': dni,
         'labels': {kl: etykieta(*dni_klucza[kl]) for kl in wyniki},
-        'lines': [linie[l] for l in sorted(dirs, key=klucz_linii)],
+        'lines': [dict(linie[l], t=' ↔ '.join(sorted({d['to'] for d in dirs[l]}, key=lambda x: [d['to'] for d in dirs[l]].index(x))))
+                  for l in sorted(dirs, key=klucz_linii)],
         'stops': stops,
         'dirs': dict(sorted(dirs.items(), key=lambda kv: klucz_linii(kv[0]))),
     }
