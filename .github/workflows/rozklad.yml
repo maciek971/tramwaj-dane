@@ -38,29 +38,31 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REPO="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          NOWE=$(python -c "import json;print(json.load(open('public/wersja.json'))['source'])")
+          NOWE=$(python -c "import json;print(json.load(open('public/wersja.json'))['id'])")
           mkdir stare nowe
-          if git -C stare init -q && git -C stare fetch -q --depth 1 "$REPO" dane && git -C stare checkout -q FETCH_HEAD; then
-            STARE=$(python -c "import json;print(json.load(open('stare/wersja.json')).get('source',''))" 2>/dev/null || true)
+          git -C stare init -q
+          set +e; git ls-remote --exit-code --heads "$REPO" dane >/dev/null; RC=$?; set -e
+          if [ $RC -eq 0 ]; then
+            # gałąź istnieje: bez jej zawartości nie publikujemy (zgubilibyśmy rozklad.json v1 i poprzednią paczkę)
+            git -C stare fetch -q --depth 1 "$REPO" dane
+            git -C stare checkout -q FETCH_HEAD
+            STARE=$(python -c "import json;print(json.load(open('stare/wersja.json')).get('id',''))" 2>/dev/null || true)
+            STARA_PACZKA=$(python -c "import json;print(json.load(open('stare/wersja.json')).get('paczka',''))" 2>/dev/null || true)
+          elif [ $RC -eq 2 ]; then
+            STARE=''; STARA_PACZKA=''   # pierwsza publikacja
           else
-            STARE=''
+            echo "Nie udało się sprawdzić gałęzi dane (kod $RC), nie publikuję."; exit 1
           fi
           echo "stare=$STARE nowe=$NOWE"
-          if [ "$STARE" = "$NOWE" ] && [ -f "stare/v/$NOWE/mpk.json" ] && python - "$NOWE" <<'EOF'
-          import json, sys
-          a = json.load(open('stare/v/%s/mpk.json' % sys.argv[1])); b = json.load(open('public/mpk.json'))
-          a.pop('generated', None); b.pop('generated', None)
-          sys.exit(0 if a == b else 1)
-          EOF
-          then
+          if [ "$STARE" = "$NOWE" ] && [ -f "stare/v/$NOWE/mpk.json" ]; then   # id = źródło + skrót treści
             echo 'Rozkład bez zmian, nie publikuję.'
             exit 0
           fi
           mkdir -p "nowe/v/$NOWE"
           cp public/wersja.json nowe/wersja.json
           cp public/mpk.json "nowe/v/$NOWE/mpk.json"
-          if [ -n "$STARE" ] && [ "$STARE" != "$NOWE" ] && [ -f "stare/v/$STARE/mpk.json" ]; then
-            mkdir -p "nowe/v/$STARE" && cp "stare/v/$STARE/mpk.json" "nowe/v/$STARE/mpk.json"
+          if [ -n "$STARA_PACZKA" ] && [ "$STARA_PACZKA" != "v/$NOWE/mpk.json" ] && [ -f "stare/$STARA_PACZKA" ]; then
+            mkdir -p "nowe/$(dirname "$STARA_PACZKA")" && cp "stare/$STARA_PACZKA" "nowe/$STARA_PACZKA"   # poprzednia wersja
           fi
           [ -f stare/rozklad.json ] && cp stare/rozklad.json nowe/rozklad.json   # format v1 dla starej wersji aplikacji
           cd nowe

@@ -69,6 +69,10 @@ class Kodowanie(unittest.TestCase):
         self.assertEqual(zb.nazwa_i_nr('GALERIA DOMINIKAŃSKA 07'), ('GALERIA DOMINIKAŃSKA', '07'))
         self.assertEqual(zb.nazwa_i_nr('Rynek'), ('Rynek', ''))
         self.assertEqual(zb.nazwa_i_nr('Plac 1 Maja'), ('Plac 1 Maja', ''))
+        self.assertEqual(zb.nazwa_i_nr('Jerzmanowska nr 17'), ('Jerzmanowska nr 17', ''))
+        wielo = zb.nazwy_wielokrotne(['RYNEK 01', 'RYNEK 02', 'Kowalska 56'])
+        self.assertEqual(zb.nazwa_i_nr('Kowalska 56', wielo), ('Kowalska 56', ''))
+        self.assertEqual(zb.nazwa_i_nr('RYNEK 02', wielo), ('RYNEK', '02'))
 
 
 class Budowa(unittest.TestCase):
@@ -156,7 +160,13 @@ class Zapis(unittest.TestCase):
                 f.write(zip_fikstury())
             self.assertEqual(zb.main(['--zip', zp, '--out', out, '--min-linii', '4']), 0)
             w = czytaj_json(os.path.join(out, 'wersja.json'))
-            self.assertEqual(w['paczka'], 'v/OtwartyWroclaw_rozklad_jazdy_GTFS_16112026/mpk.json')
+            self.assertTrue(w['id'].startswith('OtwartyWroclaw_rozklad_jazdy_GTFS_16112026-'))
+            self.assertEqual(w['paczka'], 'v/%s/mpk.json' % w['id'])
+            self.assertEqual(czytaj_json(os.path.join(out, 'mpk.json'))['id'], w['id'])
+            # ta sama treść -> to samo id (niezależnie od `generated`)
+            out2 = os.path.join(tmp, 'p2')
+            self.assertEqual(zb.main(['--zip', zp, '--out', out2, '--min-linii', '4']), 0)
+            self.assertEqual(czytaj_json(os.path.join(out2, 'wersja.json'))['id'], w['id'])
             self.assertEqual(w['rozmiar'], os.path.getsize(os.path.join(out, 'mpk.json')))
             self.assertEqual(czytaj_json(os.path.join(out, 'mpk.json'))['v'], 2)
 

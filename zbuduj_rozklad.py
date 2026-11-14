@@ -13,6 +13,7 @@ Użycie:
 Tylko biblioteka standardowa. Przy błędzie kończy się kodem 1 i niczego nie nadpisuje.
 """
 import argparse
+import hashlib
 import csv
 import datetime as dt
 import io
@@ -32,9 +33,25 @@ MIN_LINII = 100
 NR_SLUPKA = re.compile(r'^(.*\S)\s+(\d{2})$')  # 'GALERIA DOMINIKAŃSKA 07' -> nazwa + numer słupka
 
 
-def nazwa_i_nr(n):
+def nazwa_i_nr(n, wielokrotne=None):
+    """'GALERIA DOMINIKAŃSKA 07' -> ('GALERIA DOMINIKAŃSKA', '07'). Numer domu ('Jerzmanowska nr 17',
+    pojedyncza 'Kowalska 56') zostaje w nazwie: numer słupka uznajemy tylko, gdy ta sama nazwa
+    występuje z numerem co najmniej dwa razy (wielokrotne = zbiór takich nazw)."""
     m = NR_SLUPKA.match(n.strip())
-    return (m.group(1), m.group(2)) if m else (n.strip(), '')
+    if not m or m.group(1).lower().endswith(' nr'):
+        return (n.strip(), '')
+    if wielokrotne is not None and m.group(1) not in wielokrotne:
+        return (n.strip(), '')
+    return (m.group(1), m.group(2))
+
+
+def nazwy_wielokrotne(nazwy):
+    licz = Counter()
+    for n in set(nazwy):
+        m = NR_SLUPKA.match(n.strip())
+        if m and not m.group(1).lower().endswith(' nr'):
+            licz[m.group(1)] += 1
+    return {k for k, v in licz.items() if v >= 2}
 
 
 def koduj(lista):
@@ -149,6 +166,10 @@ def zbuduj(z):
         linie[lid] = {'id': lid, 'g': g, 'opis': opis}
     kursy = {t['trip_id']: t for t in czytaj(z, 'trips.txt') if t['route_id'] in trasy}
     slupki = {s['stop_id']: s for s in czytaj(z, 'stops.txt')}
+    wielo = nazwy_wielokrotne(s['stop_name'] for s in slupki.values())
+
+    def nn(sid):
+        return nazwa_i_nr(slupki[sid]['stop_name'], wielo)
     kalendarz = czytaj(z, 'calendar.txt')
     try:
         wyjatki = czytaj(z, 'calendar_dates.txt')
@@ -187,7 +208,7 @@ def zbuduj(z):
         poz, poz_nazwy = {}, {}
         for i, sid in enumerate(trasa):
             poz.setdefault(sid, i)
-            poz_nazwy.setdefault(nazwa_i_nr(slupki[sid]['stop_name'])[0], i)
+            poz_nazwy.setdefault(nn(sid)[0], i)
         kierunki.append({'line': lid, 'dir': kier, 'to': petla.upper(), 'trasa': trasa, 'poz': poz,
                          'poz_nazwy': poz_nazwy, 'tids': tids, 'petla': petla})
 
@@ -207,7 +228,7 @@ def zbuduj(z):
                     continue
                 i = k['poz'].get(sid)
                 if i is None:  # kurs z innego słupka tej samej nazwy -> słupek wzorca
-                    i = k['poz_nazwy'].get(nazwa_i_nr(slupki[sid]['stop_name'])[0])
+                    i = k['poz_nazwy'].get(nn(sid)[0])
                 if i is not None:
                     dep[i].append([m, hi])
         for d in dep:
@@ -257,12 +278,13 @@ def zbuduj(z):
         if sid not in stop_idx:
             s = slupki[sid]
             stop_idx[sid] = len(stops)
-            n, nr = nazwa_i_nr(s['stop_name'])
+            n, nr = nn(sid)
             stops.append({'c': (s.get('stop_code') or sid).strip(), 'n': n, 'nr': nr,
                           'p': [round(float(s['stop_lat']), 5), round(float(s['stop_lon']), 5)]})
         return stop_idx[sid]
 
     dirs = defaultdict(list)
+    pominiete = []
     for ki, k in enumerate(kierunki):
         hs_all, dep = [''], {}
         poprz = {}  # treść -> klucz (alias identycznego rozkładu w tej linii)
@@ -283,6 +305,7 @@ def zbuduj(z):
                 poprz[sygn] = kl
                 dep[kl] = lista
         if not any(any(v) for v in dep.values() if isinstance(v, list)):
+            pominiete.append('%s/%s' % (k['line'], k['dir']))
             continue
         for i, sid in enumerate(k['trasa']):
             if any(isinstance(v, list) and v[i] for v in dep.values()):
@@ -307,6 +330,7 @@ def zbuduj(z):
                   for l in sorted(dirs, key=klucz_linii)],
         'stops': stops,
         'dirs': dict(sorted(dirs.items(), key=lambda kv: klucz_linii(kv[0]))),
+        '_pominiete': pominiete + sorted(set(linie) - set(dirs), key=klucz_linii),
     }
 
 
@@ -330,9 +354,18 @@ def zapisz_json(obj, out):
     os.replace(tmp, out)
 
 
+def nadaj_id(r):
+    """id = źródło + skrót treści (bez `generated`): poprawka skryptu przy tym samym GTFS też dostaje nową ścieżkę."""
+    tresc = dict(r)
+    tresc.pop('generated', None)
+    tresc.pop('id', None)
+    h = hashlib.sha1(json.dumps(tresc, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8'))
+    r['id'] = '%s-%s' % (r['source'], h.hexdigest()[:8])
+
+
 def wersja(r, rozmiar):
-    return {'v': 2, 'source': r['source'], 'validFrom': r['validFrom'], 'validTo': r['validTo'],
-            'generated': r['generated'], 'paczka': 'v/%s/mpk.json' % r['source'], 'rozmiar': rozmiar}
+    return {'v': 2, 'id': r['id'], 'source': r['source'], 'validFrom': r['validFrom'], 'validTo': r['validTo'],
+            'generated': r['generated'], 'paczka': 'v/%s/mpk.json' % r['id'], 'rozmiar': rozmiar}
 
 
 def main(argv=None):
@@ -357,7 +390,9 @@ def main(argv=None):
             zrodlo = 'OtwartyWroclaw_rozklad_jazdy_GTFS_%s' % data.strftime('%d%m%Y')
         r = zbuduj(zipfile.ZipFile(io.BytesIO(dane)))
         r['source'] = zrodlo
+        pominiete = r.pop('_pominiete')
         waliduj(r, args.min_linii)
+        nadaj_id(r)
         if args.paczka:
             os.makedirs(os.path.dirname(os.path.abspath(args.paczka)), exist_ok=True)
             zapisz_json(r, args.paczka)
@@ -371,6 +406,8 @@ def main(argv=None):
         return 1
     n = sum(len(x) for ds in r['dirs'].values() for d in ds for v in d['dep'].values()
             if isinstance(v, list) for x in v)
+    if pominiete:
+        print('UWAGA: kierunki/linie bez odjazdów w tym okresie (pominięte): %s' % ', '.join(pominiete))
     print('OK %s: %s..%s, %d linii, %d słupków, %d odjazdów, typy dni: %s' % (
         r['source'], r['validFrom'], r['validTo'], len(r['lines']), len(r['stops']), n, r['labels']))
     return 0
