@@ -2,8 +2,9 @@
 
 Lekki rozkład jazdy tramwajów **3 i 5 MPK Wrocław** dla aplikacji na telefon z KaiOS.
 
-- Wynik: <https://maciek971.github.io/tramwaj-dane/rozklad.json> (ok. 150 KB, ok. 20 KB po kompresji).
-- Odświeżany codziennie o 03:30 UTC przez GitHub Actions (`.github/workflows/rozklad.yml`). Gdy skrypt zgłosi błąd, zostaje poprzedni plik.
+- Wynik: <https://cdn.jsdelivr.net/gh/maciek971/tramwaj-dane@dane/rozklad.json> (gałąź `dane`, ok. 150 KB, ok. 20 KB po kompresji).
+- Odświeżany codziennie o 03:30 UTC przez GitHub Actions (`.github/workflows/rozklad.yml`). Gdy skrypt zgłosi błąd albo rozkład się nie zmienił, zostaje poprzedni plik.
+- Dlaczego jsDelivr, a nie GitHub Pages: KaiOS 2.5 (Gecko 48) nie ufa certyfikatom Let's Encrypt, których używają github.io i raw.githubusercontent.com.
 
 ## Źródło danych
 

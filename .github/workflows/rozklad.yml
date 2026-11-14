@@ -1,5 +1,9 @@
 name: Rozkład 3 i 5
 
+# Wynik trafia na gałąź `dane`, a telefon pobiera go przez jsDelivr:
+# https://cdn.jsdelivr.net/gh/maciek971/tramwaj-dane@dane/rozklad.json
+# (KaiOS 2.5 nie ufa certyfikatom Let's Encrypt, więc GitHub Pages i raw.githubusercontent.com odpadają.)
+
 on:
   schedule:
     - cron: '30 3 * * *'   # codziennie 03:30 UTC
@@ -8,12 +12,10 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: rozklad
   cancel-in-progress: false
 
 jobs:
@@ -30,15 +32,28 @@ jobs:
         env:
           TZ: Europe/Warsaw
         run: python zbuduj_rozklad.py --out public/rozklad.json
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Opublikuj na gałęzi dane
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir out && cd out
+          git init -q -b dane
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin dane; then git checkout -q -B dane FETCH_HEAD; fi
+          if [ -f rozklad.json ] && python - <<'EOF'
+          import json, sys
+          a = json.load(open('rozklad.json')); b = json.load(open('../public/rozklad.json'))
+          a.pop('generated', None); b.pop('generated', None)
+          sys.exit(0 if a == b else 1)
+          EOF
+          then
+            echo 'Rozkład bez zmian, nie publikuję.'
+            exit 0
+          fi
+          cp ../public/rozklad.json rozklad.json
+          git add rozklad.json
+          git commit -q -m "Rozkład $(python -c "import json;r=json.load(open('rozklad.json'));print(r['source'])")"
+          git push -q origin dane
+          curl -fsS https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@dane/rozklad.json || true
