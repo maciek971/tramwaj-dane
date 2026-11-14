@@ -1,0 +1,12 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
+3,WK,3a,"DELTA",0,1
+3,WK,3b,"DELTA",0,1
+3,WK,3dep,"Zajezdnia GAJ",0,1
+3,WE,3we,"DELTA",0,1
+3,WK,3r,"ALFA",1,2
+3,WE,3rwe,"ALFA",1,2
+5,WK,5a,"DELTA",0,3
+5,WE,5we,"DELTA",0,3
+5,WK,5r,"ECHO",1,4
+5,WE,5rwe,"ECHO",1,4
+9,WK,9a,"DELTA",0,5
