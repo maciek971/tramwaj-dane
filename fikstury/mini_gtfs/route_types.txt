@@ -1,0 +1,4 @@
+route_type2_id,route_type2_name
+31,"Normalna tramwajowa"
+39,"Strefowa autobusowa"
+40,"Nocna autobusowa"

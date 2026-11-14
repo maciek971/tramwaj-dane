@@ -9,4 +9,5 @@ route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
 5,WE,5we,"DELTA",0,3
 5,WK,5r,"ECHO",1,4
 5,WE,5rwe,"ECHO",1,4
-9,WK,9a,"DELTA",0,5
+116,WK,116a,"ECHO",0,6
+240,WK,240a,"ALFA",0,7
